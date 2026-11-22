@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob: mediastream:; connect-src 'self' ws://localhost:* http://localhost:*"
+    />
+    <title>Green Room</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app" class="stage">
+      <!-- Consent gate. Nothing starts until this is answered. -->
+      <section id="consent" class="consent" aria-labelledby="consent-title">
+        <div class="consent-card">
+          <p class="eyebrow">Green Room</p>
+          <h1 id="consent-title">A breath coach for people who talk for a living</h1>
+          <p class="lede">
+            Green Room learns how you breathe when you are quiet, then counts how long you talk without
+            stopping. When the stretch gets long, it dims the screen and shows you one word.
+          </p>
+
+          <ul class="consent-list">
+            <li><strong>Camera only.</strong> No microphone is used at any point.</li>
+            <li><strong>Silent first.</strong> It spends the first half minute learning your resting breathing, and says nothing.</li>
+            <li><strong>Nothing is recorded.</strong> No video, no audio, no vitals are written to disk by this app.</li>
+            <li><strong>Processing is local.</strong> Signals are computed on this machine by the Presage SDK. The only network call is the SDK's API key check.</li>
+            <li><strong>SDK telemetry is off.</strong> This app constructs the SDK with telemetry disabled.</li>
+            <li><strong>It is wellness and performance feedback, not a medical device.</strong> Nothing here diagnoses or treats anything.</li>
+          </ul>
+
+          <label class="check">
+            <input type="checkbox" id="consent-check" />
+            <span>I understand the camera is on while the session runs, and that this is not medical advice.</span>
+          </label>
+
+          <div class="consent-actions">
+            <button id="start" class="btn primary" disabled>Turn on the camera</button>
+            <button id="quit" class="btn ghost">Not now</button>
+          </div>
+          <p id="key-warning" class="warning" hidden>
+            No API key found. Add SMARTSPECTRA_API_KEY to a .env file next to package.json, then restart.
+          </p>
+        </div>
+      </section>
+
+      <!-- Main session view. -->
+      <main id="session" class="session" hidden>
+        <header class="topbar">
+          <div class="brand">
+            <span class="dot" id="status-dot"></span>
+            <span class="brand-name">Green Room</span>
+            <span id="status-text" class="status-text">idle</span>
+          </div>
+          <div class="badges">
+            <span class="badge">no microphone</span>
+            <span class="badge">records nothing</span>
+            <span class="badge" id="sim-badge" hidden>simulated data</span>
+            <span class="clock" id="clock">0:00</span>
+            <button id="stop" class="btn small">End session</button>
+          </div>
+        </header>
+
+        <div class="grid">
+          <section class="pane preview-pane">
+            <div class="video-wrap">
+              <video id="preview" playsinline muted></video>
+              <div class="frame-corners" aria-hidden="true"></div>
+              <div id="hint" class="hint">looking for a face</div>
+              <div id="talk-flag" class="talk-flag" hidden>talking</div>
+            </div>
+            <p class="preview-note">Stay in frame, front-lit, roughly an arm's length away.</p>
+          </section>
+
+          <section class="pane readout-pane">
+            <div class="breath-ring" aria-hidden="true">
+              <div class="ring-outer"></div>
+              <div id="ring-inner" class="ring-inner"></div>
+              <div class="ring-label"><span id="br-value">--</span><small>br/min</small></div>
+            </div>
+
+            <div class="numbers">
+              <div class="number">
+                <span class="k">pulse</span>
+                <span class="v" id="pulse-value">--</span>
+              </div>
+              <div class="number">
+                <span class="k">hrv rmssd</span>
+                <span class="v" id="hrv-value">--</span>
+              </div>
+              <div class="number">
+                <span class="k">your baseline</span>
+                <span class="v" id="baseline-value">--</span>
+              </div>
+            </div>
+
+            <div class="streak">
+              <div class="streak-head">
+                <span>unbroken talking</span>
+                <span id="cue-threshold" class="muted">cue at 25s</span>
+              </div>
+              <div class="streak-track"><div id="streak-fill" class="streak-fill"></div></div>
+              <div class="streak-foot"><span id="streak-value">0.0s</span><span id="last-event" class="muted"></span></div>
+            </div>
+          </section>
+        </div>
+
+        <footer class="bottombar">
+          <p id="footnote" class="footnote">
+            Baseline is the first 30 quiet seconds. Breathing is only readable in silence, so cues come from talking plus pulse.
+          </p>
+          <div class="foot-actions">
+            <button id="export" class="btn ghost small" disabled>Export session summary</button>
+          </div>
+        </footer>
+      </main>
+
+      <!-- The cue. One word, as little else as possible. -->
+      <div id="cue" class="cue" hidden>
+        <p class="cue-word" id="cue-word">Breathe</p>
+        <p class="cue-sub" id="cue-sub">let the exhale finish</p>
+      </div>
+
+      <!-- Session summary. -->
+      <div id="summary" class="summary" hidden>
+        <div class="summary-card">
+          <p class="eyebrow">Session</p>
+          <h2 id="summary-title">Nice work</h2>
+          <div class="summary-grid">
+            <div><span class="k">longest unbroken talk</span><span class="v" id="s-longest">--</span></div>
+            <div><span class="k">resting br, start to end</span><span class="v" id="s-br">--</span></div>
+            <div><span class="k">cues</span><span class="v" id="s-cues">--</span></div>
+            <div><span class="k">pauses / average pause</span><span class="v" id="s-pause">--</span></div>
+          </div>
+          <p class="summary-note" id="summary-note"></p>
+          <div class="consent-actions">
+            <button id="again" class="btn primary">Go again</button>
+            <button id="close-summary" class="btn ghost">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>
